@@ -3,6 +3,7 @@
 namespace BookStack\Settings;
 
 use BookStack\Users\Models\User;
+use BookStack\Users\Models\Role;
 
 /**
  * Class SettingService
@@ -60,6 +61,77 @@ class SettingService
     public function getForCurrentUser(string $key, $default = null)
     {
         return $this->getUser(user(), $key, $default);
+    }
+
+    
+    /**
+     * Get a role-specific setting from the database or cache.
+     */
+    public function getRole(Role $role, string $key, $default = null)
+    {
+        return $this->get($this->roleKey($role->id, $key), $default);
+    }
+
+
+    /**
+     * Get a value for the current logged-in user roles.
+     */
+    public function getForCurrentUserRoles(string $key, $default = null)
+    {
+        $user = user();
+
+        foreach($user->roles->all() as $role ){
+            $val = $this->getRole($role, $key, $default);
+
+            if($val !== null){
+                return $val;
+            }
+        }
+
+        return $default;
+    }
+    
+
+    /**
+     * Get a value map for the current logged-in user roles.
+     */
+    public function mapForCurrentUserRoles(string $key, $default = null)
+    {
+        $user = user();
+
+        foreach($user->roles->all() as $role ){
+            $val = $this->getRole($role, $key, $default);
+
+            if($val !== null){
+                return [
+                    'role' => $role->id,
+                    'value' => $val,
+                ];
+            }
+        }
+
+        return $default;
+    }
+
+    public function listInRoles(string $key){
+
+        if(!$key){
+            return [];
+        }
+
+        return Setting::whereLike(
+                'setting_key',
+                "role:%:".$key
+            )
+            ->get()
+            ->map(function($set){
+                $role = explode(':', $set->setting_key)[1];
+                return [
+                    'role' => $role,
+                    'key' => $set->setting_key,
+                    'value' => $set->value
+                ];
+            });
     }
 
     /**
@@ -214,6 +286,17 @@ class SettingService
 
         return $this->put($this->userKey($user->id, $key), $value);
     }
+    
+    /**
+     * Put a role-specific setting into the database.
+     * Can only take string value types since this may use
+     * the session which is less flexible to data types.
+     */
+    public function putRole(Role $role, string $key, string $value): bool
+    {
+        return $this->put($this->roleKey($role->id, $key), $value);
+    }
+
 
     /**
      * Put a user-specific setting into the database for the current access user.
@@ -231,6 +314,14 @@ class SettingService
     protected function userKey(string $userId, string $key = ''): string
     {
         return 'user:' . $userId . ':' . $key;
+    }
+
+    /**
+     * Convert a setting key into a role-specific key.
+     */
+    function roleKey(string $roleId, string $key = ''): string
+    {
+        return 'role:' . $roleId . ':' . $key;
     }
 
     /**
@@ -256,6 +347,26 @@ class SettingService
     {
         Setting::query()
             ->where('setting_key', 'like', $this->userKey($userId) . '%')
+            ->delete();
+    }
+
+    /**
+     * Delete settings for a given role id.
+     */
+    public function deleteRoleSettings(string $roleId): void
+    {
+        Setting::query()
+            ->where('setting_key', 'like', $this->roleKey($roleId) . '%')
+            ->delete();
+    }
+    
+    /**
+     * Delete settings with a given key for all roles.
+     */
+    public function deleteRolesSetting(string $key): void
+    {
+        Setting::query()
+            ->where('setting_key', 'like', 'role:%:' . $key)
             ->delete();
     }
 

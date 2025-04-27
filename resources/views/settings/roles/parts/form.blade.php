@@ -14,7 +14,7 @@
                 @include('form.text', ['name' => 'description', 'model' => $role])
             </div>
             <div class="form-group">
-                @include('form.checkbox', ['name' => 'mfa_enforced', 'label' => trans('settings.role_mfa_enforced'), 'model' => $role ])
+                @include('form.checkbox', ['name' => 'mfa_enforced', 'label' => trans('settings.role_mfa_enforced'), 'model' => $role])
             </div>
 
             @if(in_array(config('auth.method'), ['ldap', 'saml2', 'oidc']))
@@ -49,6 +49,9 @@
             </div>
         </div>
     </div>
+    @if (isset($role))
+        <div>@include('settings.roles.parts.homepage')</div>
+    @endif
 
     <div>
         <label class="setting-list-label">{{ trans('settings.role_asset') }}</label>

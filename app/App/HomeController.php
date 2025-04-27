@@ -50,11 +50,7 @@ class HomeController extends Controller
             ->take($favourites->count() > 0 ? 5 : 10)
             ->get();
 
-        $homepageOptions = ['default', 'books', 'bookshelves', 'page'];
-        $homepageOption = setting('app-homepage-type', 'default');
-        if (!in_array($homepageOption, $homepageOptions)) {
-            $homepageOption = 'default';
-        }
+
 
         $commonData = [
             'activity'             => $activity,
@@ -63,6 +59,35 @@ class HomeController extends Controller
             'draftPages'           => $draftPages,
             'favourites'           => $favourites,
         ];
+
+        
+        $homepageOptions = ['default', 'books', 'bookshelves', 'page'];
+        $homepageSetting = '';
+        $homepageOption = setting('app-homepage-type', 'default');
+
+
+        // First [role->id=>homepage-type] with configured page founded on current user, if any.
+        $roleHomepageResult = setting()->mapForCurrentUserRoles('homepage-type');
+        
+
+        if($roleHomepageResult){
+            // Extract the role id from the array
+            $roleId = $roleHomepageResult['role'];
+            $roleHomepage = $roleHomepageResult['value'];
+
+            if($roleId){
+                // Extract the actual 'homepage-type'    
+                if (in_array($roleHomepage, $homepageOptions)) {
+                    $homepageOption = $roleHomepage;
+                    $key = setting()->roleKey($roleId, 'homepage');
+                    $homepageSetting = setting($key);
+                }
+            }
+        }
+
+        if (!in_array($homepageOption, $homepageOptions)) {
+            $homepageOption = 'default';
+        }
 
         // Add required list ordering & sorting for books & shelves views.
         if ($homepageOption === 'bookshelves' || $homepageOption === 'books') {
@@ -99,7 +124,9 @@ class HomeController extends Controller
         }
 
         if ($homepageOption === 'page') {
-            $homepageSetting = setting('app-homepage', '0:');
+            if(!$homepageSetting){
+                $homepageSetting = setting('app-homepage', '0:');
+            }
             $id = intval(explode(':', $homepageSetting)[0]);
             /** @var Page $customHomepage */
             $customHomepage = $this->queries->pages->start()->where('draft', '=', false)->findOrFail($id);

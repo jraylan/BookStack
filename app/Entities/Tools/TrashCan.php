@@ -95,6 +95,46 @@ class TrashCan
         $page->delete();
     }
 
+    
+
+    protected function ensureDeletableInRoles(Entity $entity)
+    {
+
+        $rolesSetting = setting()->listInRoles('homepage');
+        $toBeDeleted = [];
+
+        foreach($rolesSetting as $setting){
+            $customHomeId = intval(explode(':', $setting['value'])[0]);
+            $customHomeActive = setting($setting['key'] . '-type') === 'page';
+            $removeCustomHome = false;
+
+            
+            // Check custom homepage usage for pages
+            if ($entity instanceof Page && $entity->id === $customHomeId) {
+                $removeCustomHome = true;
+                throw new NotifyException(trans('errors.page_custom_home_deletion'), $entity->getUrl());
+            }
+
+            // Check custom homepage usage within chapters or books
+            if ($entity instanceof Chapter || $entity instanceof Book) {
+                if ($entity->pages()->where('id', '=', $customHomeId)->exists()) {
+                    if ($customHomeActive) {
+                        throw new NotifyException(trans('errors.page_custom_home_deletion'), $entity->getUrl());
+                    }
+                    $removeCustomHome = true;
+                }
+            }
+            
+            if ($removeCustomHome) {
+                array_push($toBeDeleted, $setting['key']);
+            }
+        }
+
+        foreach($toBeDeleted as $key){
+            setting()->remove($key);
+        }
+    }
+
     /**
      * Ensure the given entity is deletable.
      * Is not for permissions, but logical conditions within the application.
@@ -125,6 +165,9 @@ class TrashCan
                 $removeCustomHome = true;
             }
         }
+
+        // Check role custom homepage usage
+        $this->ensureDeletableInRoles($entity);
 
         if ($removeCustomHome) {
             setting()->remove('app-homepage');

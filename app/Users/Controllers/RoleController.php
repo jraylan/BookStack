@@ -2,6 +2,7 @@
 
 namespace BookStack\Users\Controllers;
 
+use BookStack\Entities\Models\Page;
 use BookStack\Exceptions\PermissionsException;
 use BookStack\Http\Controller;
 use BookStack\Permissions\PermissionsRepo;
@@ -116,7 +117,35 @@ class RoleController extends Controller
 
         $data['permissions'] = array_keys($data['permissions'] ?? []);
         $data['mfa_enforced'] = ($data['mfa_enforced'] ?? 'false') === 'true';
-        $this->permissionsRepo->updateRole($id, $data);
+        $role = $this->permissionsRepo->updateRole($id, $data);
+
+        
+        try{
+            $homepage = $this->validate($request, [
+                'homepage-type' => ['string'],
+                'homepage' => ['string'],
+            ]);
+
+            $homepageOptions = ['default', 'books', 'bookshelves'];
+            $homepageType = $homepage['homepage-type'];
+            $pageId = intval(explode(':',  $homepage['homepage'])[0]);
+            $query = Page::where('id', '=', $pageId);
+        
+            if($homepageType == 'page' && $pageId && $query->exists()){
+                setting()->putRole($role, 'homepage-type', 'page');
+                setting()->putRole($role, 'homepage', $pageId);
+            } else if(in_array($homepageType, $homepageOptions)){
+                setting()->putRole($role, 'homepage-type',  $homepageType);
+                setting()->putRole($role, 'homepage', '');
+            } else {
+                setting()->putRole($role, 'homepage-type', '');
+                setting()->putRole($role, 'homepage', '');
+            }
+        } catch (Exception $e) {
+            setting()->putRole($role, 'homepage-type', '');
+            setting()->putRole($role, 'homepage', '');
+            error_log($e->getMessage());
+        }
 
         return redirect('/settings/roles');
     }
